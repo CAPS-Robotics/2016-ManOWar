@@ -5,15 +5,15 @@ int sgn(double num) {
 	return num == 0 ? 0 : num / fabs(num);
 }
 
+float sym_sigmoid(float x, float a, float b, float c, float d) {
+	return d + ((a - d)/(a + pow(x / c, b)));
+}
+
 class ManOWar : public SampleRobot
 {
 public:
 	RobotDrive *robotDrive;
 	Joystick *joystick;
-
-	SendableChooser *sendableChooser;
-	const std::string autoNameDefault = "Default";
-	const std::string autoNameCustom = "My Auto";
 
 	Talon *intakeTalon;
 	CANTalon *topFireCanTalon;

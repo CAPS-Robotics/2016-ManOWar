@@ -6,8 +6,6 @@ ManOWar::ManOWar() {
 	this->robotDrive = new RobotDrive(LEFT_TANK_TALON, RIGHT_TANK_TALON);
 	this->joystick = new Joystick(0);
 
-	this->sendableChooser = NULL;
-
 	this->intakeTalon = new Talon(INTAKE_TALON);
 	this->topFireCanTalon = new CANTalon(TOP_FIRE_CAN_TALON);
 	this->botFireCanTalon = new CANTalon(BOT_FIRE_CAN_TALON);
@@ -21,11 +19,6 @@ ManOWar::ManOWar() {
 }
 
 void ManOWar::RobotInit() {
-	this->sendableChooser = new SendableChooser();
-	this->sendableChooser->AddDefault(autoNameDefault, (void*)&autoNameDefault);
-	this->sendableChooser->AddObject(autoNameCustom, (void*)&autoNameCustom);
-	SmartDashboard::PutData("Auto Modes", sendableChooser);
-
 	this->topFireCanTalon->SetFeedbackDevice(CANTalon::FeedbackDevice::QuadEncoder);
 	this->topFireCanTalon->ConfigEncoderCodesPerRev(1024);
 	this->topFireCanTalon->SetPID(0.05f, 0.000096f, 0.8f, 0.f);
@@ -43,6 +36,7 @@ void ManOWar::RobotInit() {
 	SmartDashboard::PutString("DB/String 0", "2550");
 	SmartDashboard::PutString("DB/String 1", "2550");
 	SmartDashboard::PutString("DB/String 2", "1");
+	SmartDashboard::PutString("DB/String 3", "0");
 
 	this->jetsonSerialPort->DisableTermination();
 	//jetsonSerialPort.SetFlowControl(SerialPort::FlowControl::kFlowControl_XonXoff);
@@ -54,7 +48,8 @@ void ManOWar::RobotInit() {
 }
 
 void ManOWar::Autonomous() {
-
+	int mode = std::stof(SmartDashboard::GetString("DB/String 3", "0"));
+	DriverStation::ReportError("Running autonomous " + mode);
 }
 
 void ManOWar::OperatorControl() {
@@ -68,8 +63,7 @@ void ManOWar::OperatorControl() {
 		char buffer[8];
 		memset(buffer, 0, 8);
 		while(!(*serialThreadQuit)) {
-			SmartDashboard::PutString("DB/String 3", std::to_string(*reads));
-			//SmartDashboard::PutString("DB/String 4", std::to_string(this->jetsonSerialPort->GetBytesReceived()));
+			SmartDashboard::PutString("DB/String 4", std::to_string(*reads));
 			if (this->jetsonSerialPort->GetBytesReceived() >= 8) {
 				this->jetsonSerialPort->Read(buffer, 8);
 				this->jetsonSerialPort->Reset();
@@ -106,9 +100,19 @@ void ManOWar::OperatorControl() {
 
 	while (RobotBase::IsEnabled()) {
 		// Grab values from dashboard
-		topFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 0", "0"));
-		botFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 1", "0"));
+		//topFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 0", "0"));
+		//botFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 1", "0"));
 		intakeRpm = std::stof(SmartDashboard::GetString("DB/String 2", "0"));
+
+		// Calculate power
+		if (*distance <= 0 || *distance >= 250.f) {
+			// Correct for serial error
+			*distance = 120.f;
+		}
+		topFireTargetRpm = sym_sigmoid(*distance, POWER_FUNC_A, POWER_FUNC_B, POWER_FUNC_C, POWER_FUNC_D);
+		botFireTargetRpm = sym_sigmoid(*distance, POWER_FUNC_A, POWER_FUNC_B, POWER_FUNC_C, POWER_FUNC_D);
+		SmartDashboard::PutString("DB/String 0", std::to_string(topFireTargetRpm));
+		SmartDashboard::PutString("DB/String 1", std::to_string(botFireTargetRpm));
 
 		// Get buttons
 		intake = this->joystick->GetRawButton(JOY_BTN_LBM);
@@ -119,7 +123,7 @@ void ManOWar::OperatorControl() {
 		autoAlign = this->joystick->GetRawButton(JOY_BTN_Y);
 
 		// Drive
-		if (autoAlign && fabs(*angle) > 5) {
+		if (autoAlign) {
 			this->robotDrive->ArcadeDrive(0, -sgn(*angle) * ALIGN_ROTATE_POWER, false);
 		}
 		else {
