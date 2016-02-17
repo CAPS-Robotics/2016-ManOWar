@@ -19,20 +19,22 @@ public:
 	CANTalon *topFireCanTalon;
 	CANTalon *botFireCanTalon;
 
+	Relay *ledRelay;
+
 	SerialPort *jetsonSerialPort;
 	NetworkTable *jetsonNetworkTable;
 
-    ManOWar();
-    ~ManOWar() {};
+	ManOWar();
+	~ManOWar() {};
 
-    void RobotInit();
-    void Disabled() {};
-    void Autonomous();
-    void OperatorControl();
-    void Test() {};
-    // Don't override
-    //void RobotMain() {};
-    //void StartCompetition() {};
+	void RobotInit();
+	void Disabled() {};
+	void Autonomous();
+	void OperatorControl();
+	void Test() {};
+	// Don't override
+	//void RobotMain() {};
+	//void StartCompetition() {};
 };
 
 #endif
