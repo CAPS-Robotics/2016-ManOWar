@@ -105,7 +105,7 @@ void ManOWar::OperatorControl() {
 		intakeRpm = std::stof(SmartDashboard::GetString("DB/String 2", "0"));
 
 		// Calculate power
-		if (*distance <= 0 || *distance >= 250.f) {
+		if (*distance <= 0 || *distance >= 250.f || isnan(*distance)) {
 			// Correct for serial error
 			*distance = 120.f;
 		}

@@ -45,6 +45,6 @@
 #define POWER_FUNC_A				2550.f
 #define POWER_FUNC_B				349.7569f
 #define POWER_FUNC_C				164.4825f
-#define POWER_FUNC_D				2750f
+#define POWER_FUNC_D				2750.f
 
 #endif

@@ -6,7 +6,7 @@ int sgn(double num) {
 }
 
 float sym_sigmoid(float x, float a, float b, float c, float d) {
-	return d + ((a - d)/(a + pow(x / c, b)));
+	return d + ((a - d)/(1 + pow(x / c, b)));
 }
 
 class ManOWar : public SampleRobot
