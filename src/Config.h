@@ -29,16 +29,20 @@
 #define JOY_AXIS_DX					4
 #define JOY_AXIS_DY					5
 
-//Fire talons are CAN
+// Fire talons are CAN
 #define PDP_CAN						1
 #define TOP_FIRE_CAN_TALON			2
 #define	BOT_FIRE_CAN_TALON			3
-//Other talons are PWM
+// Other talons are PWM
 #define LEFT_TANK_TALON				0
 #define RIGHT_TANK_TALON			1
 #define INTAKE_TALON				2
 
+// Relay
 #define LED_RELAY					0
+
+// Analog
+#define GYRO_ANALOG					0
 
 #define ALIGN_ROTATE_POWER			0.24f
 

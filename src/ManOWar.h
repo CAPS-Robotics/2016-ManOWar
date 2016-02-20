@@ -21,6 +21,8 @@ public:
 
 	Relay *ledRelay;
 
+	AnalogGyro *gyro;
+
 	SerialPort *jetsonSerialPort;
 	NetworkTable *jetsonNetworkTable;
 

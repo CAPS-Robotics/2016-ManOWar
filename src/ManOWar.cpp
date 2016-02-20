@@ -3,6 +3,7 @@
 #include <ManOWar.h>
 
 ManOWar::ManOWar() {
+	DriverStation::ReportError("Running pre-init...");
 	this->robotDrive = new RobotDrive(LEFT_TANK_TALON, RIGHT_TANK_TALON);
 	this->joystick = new Joystick(0);
 
@@ -12,6 +13,8 @@ ManOWar::ManOWar() {
 
 	this->ledRelay = new Relay(LED_RELAY);
 
+	this->gyro = new AnalogGyro(GYRO_ANALOG);
+
 	this->jetsonSerialPort = new SerialPort(38400, SerialPort::Port::kMXP, 8,
 			SerialPort::Parity::kParity_None,
 			SerialPort::StopBits::kStopBits_One);
@@ -19,6 +22,7 @@ ManOWar::ManOWar() {
 }
 
 void ManOWar::RobotInit() {
+	DriverStation::ReportError("Running RobotInit()...");
 	this->topFireCanTalon->SetFeedbackDevice(CANTalon::FeedbackDevice::QuadEncoder);
 	this->topFireCanTalon->ConfigEncoderCodesPerRev(1024);
 	this->topFireCanTalon->SetPID(0.05f, 0.000096f, 0.8f, 0.f);
@@ -32,6 +36,11 @@ void ManOWar::RobotInit() {
 	this->botFireCanTalon->SetControlMode(CANTalon::ControlMode::kSpeed);
 	this->botFireCanTalon->SetSensorDirection(true);
 	this->botFireCanTalon->SetClosedLoopOutputDirection(true);
+
+	DriverStation::ReportError("[RobotInit()] Gyro calibrateding...");
+	this->gyro->InitGyro();
+	this->gyro->Calibrate();
+	DriverStation::ReportError("[RobotInit()] Gyro calibrated.");
 
 	SmartDashboard::PutString("DB/String 0", "2550");
 	SmartDashboard::PutString("DB/String 1", "2550");
@@ -49,10 +58,11 @@ void ManOWar::RobotInit() {
 
 void ManOWar::Autonomous() {
 	int mode = std::stof(SmartDashboard::GetString("DB/String 3", "0"));
-	DriverStation::ReportError("Running autonomous " + mode);
+	DriverStation::ReportError("Running Autonomous() " + mode);
 }
 
 void ManOWar::OperatorControl() {
+	DriverStation::ReportError("Running OperatorControl()...");
 	bool *serialThreadQuit = new bool(false);
 	std::thread *serialThread;
 	float *angle = new float(0);
@@ -96,6 +106,10 @@ void ManOWar::OperatorControl() {
 	bool autoFire;
 	bool autoAlign;
 
+	bool aligning = false;
+	bool aligned = false;
+	float refAngle = 0;
+
 	bool fire;
 
 	while (RobotBase::IsEnabled()) {
@@ -124,10 +138,29 @@ void ManOWar::OperatorControl() {
 
 		// Drive
 		if (autoAlign) {
-			this->robotDrive->ArcadeDrive(0, -sgn(*angle) * ALIGN_ROTATE_POWER, false);
+			if (aligning && !aligned) {
+				DriverStation::ReportError(std::to_string(this->gyro->GetAngle()));
+				if (fabs(refAngle - this->gyro->GetAngle()) > 0.5) {
+					this->robotDrive->ArcadeDrive(0, sgn(refAngle) * ALIGN_ROTATE_POWER, false);
+				}
+				else {
+					DriverStation::ReportError("Aligned.");
+					this->robotDrive->ArcadeDrive(0, 0, false);
+					aligning = false;
+					aligned = true;
+				}
+			}
+			else {
+				aligning = true;
+				refAngle = *angle;
+				this->gyro->Reset();
+				DriverStation::ReportError("Starting alignment...");
+			}
 		}
 		else {
 			this->robotDrive->ArcadeDrive(this->joystick->GetRawAxis(JOY_AXIS_LY), this->joystick->GetRawAxis(JOY_AXIS_RX) * 0.75f);
+			aligning = false;
+			aligned = false;
 		}
 
 		// Get encoder RPMs
@@ -186,6 +219,7 @@ void ManOWar::OperatorControl() {
 	delete angle;
 	delete distance;
 	delete reads;
+	DriverStation::ReportError("Exiting OperatorControl()...");
 }
 
 START_ROBOT_CLASS(ManOWar);
