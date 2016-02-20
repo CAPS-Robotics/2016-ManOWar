@@ -23,6 +23,8 @@ public:
 
 	AnalogGyro *gyro;
 
+	DigitalInput *intakeSwitch;
+
 	SerialPort *jetsonSerialPort;
 	NetworkTable *jetsonNetworkTable;
 

@@ -33,16 +33,23 @@
 #define PDP_CAN						1
 #define TOP_FIRE_CAN_TALON			2
 #define	BOT_FIRE_CAN_TALON			3
+#define ARM_ONE_CAN_TALON			4
+#define ARM_TWO_CAN_TALON			5
 // Other talons are PWM
 #define LEFT_TANK_TALON				0
 #define RIGHT_TANK_TALON			1
 #define INTAKE_TALON				2
+#define WINCH_TALON					3
+#define TAPE_TALON					4
 
 // Relay
 #define LED_RELAY					0
 
 // Analog
 #define GYRO_ANALOG					0
+
+// Digital
+#define INTAKE_SWITCH				0
 
 #define ALIGN_ROTATE_POWER			0.24f
 
