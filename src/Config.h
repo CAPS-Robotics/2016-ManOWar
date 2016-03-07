@@ -33,8 +33,8 @@
 #define PDP_CAN						1
 #define TOP_FIRE_CAN_TALON			2
 #define	BOT_FIRE_CAN_TALON			3
-#define ARM_ONE_CAN_TALON			4
-#define ARM_TWO_CAN_TALON			5
+#define ARM_A_CAN_TALON				4
+#define ARM_B_CAN_TALON				5
 // Other talons are PWM
 #define LEFT_TANK_TALON				0
 #define RIGHT_TANK_TALON			1
@@ -48,14 +48,24 @@
 // Analog
 #define GYRO_ANALOG					0
 
-// Digital
-#define INTAKE_SWITCH				0
+#define PHOTO_DIGITAL				9
 
-#define ALIGN_ROTATE_POWER			0.24f
+#define ALIGN_ROTATE_POWER			0.25f
 
 #define POWER_FUNC_A				2550.f
 #define POWER_FUNC_B				349.7569f
 #define POWER_FUNC_C				164.4825f
 #define POWER_FUNC_D				2750.f
+
+#define PORT_ARM_A					0
+#define PORT_ARM_B					0
+#define BRIDGE_ARM_A				0
+#define BRIDGE_ARM_B				0
+#define SALLY_ARM_A_A				-0.4f
+#define SALLY_ARM_B_A				0.3f
+#define SALLY_ARM_A_B				-0.2f
+#define SALLY_ARM_B_B				0.3f
+#define FRISE_ARM_A					0
+#define FRISE_ARM_B					0
 
 #endif

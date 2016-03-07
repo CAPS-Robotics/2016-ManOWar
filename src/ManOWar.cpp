@@ -10,17 +10,20 @@ ManOWar::ManOWar() {
 	this->intakeTalon = new Talon(INTAKE_TALON);
 	this->topFireCanTalon = new CANTalon(TOP_FIRE_CAN_TALON);
 	this->botFireCanTalon = new CANTalon(BOT_FIRE_CAN_TALON);
+	this->armACanTalon = new CANTalon(ARM_A_CAN_TALON);
+	this->armBCanTalon = new CANTalon(ARM_B_CAN_TALON);
 
 	this->ledRelay = new Relay(LED_RELAY);
 
 	this->gyro = new AnalogGyro(GYRO_ANALOG);
+	this->photoSensor = new DigitalInput(PHOTO_DIGITAL);
 
-	this->intakeSwitch = new DigitalInput(INTAKE_SWITCH);
-
-	this->jetsonSerialPort = new SerialPort(38400, SerialPort::Port::kMXP, 8,
+	this->jetsonSerialPort = new SerialPort(9600, SerialPort::Port::kMXP, 8,
 			SerialPort::Parity::kParity_None,
 			SerialPort::StopBits::kStopBits_One);
 	this->jetsonNetworkTable = NULL;
+
+	this->armMode = new bool(false);
 }
 
 void ManOWar::RobotInit() {
@@ -39,6 +42,26 @@ void ManOWar::RobotInit() {
 	this->botFireCanTalon->SetSensorDirection(false);
 	this->botFireCanTalon->SetClosedLoopOutputDirection(false);
 
+	//TEST CODE
+	if (SmartDashboard::GetBoolean("DB/Button 0", false)) {
+		this->armACanTalon = new CANTalon(TOP_FIRE_CAN_TALON);
+		this->armMode = new bool(true);
+	}
+
+	this->armACanTalon->SetFeedbackDevice(CANTalon::FeedbackDevice::QuadEncoder);
+	this->armACanTalon->ConfigEncoderCodesPerRev(497);
+	this->armACanTalon->SetPID(1.8f, 0.00006f, 0.00008f, 0.f);
+	this->armACanTalon->SetControlMode(CANTalon::ControlMode::kPosition);
+	this->armACanTalon->SetSensorDirection(false);
+	this->armACanTalon->SetClosedLoopOutputDirection(false);
+
+	this->armBCanTalon->SetFeedbackDevice(CANTalon::FeedbackDevice::QuadEncoder);
+	this->armBCanTalon->ConfigEncoderCodesPerRev(497);
+	this->armBCanTalon->SetPID(1.8f, 0.00006f, 0.00008f, 0.f);
+	this->armBCanTalon->SetControlMode(CANTalon::ControlMode::kPosition);
+	this->armBCanTalon->SetSensorDirection(false);
+	this->armBCanTalon->SetClosedLoopOutputDirection(false);
+
 	DriverStation::ReportError("[RobotInit()] Gyro calibrating...");
 	this->gyro->InitGyro();
 	this->gyro->Calibrate();
@@ -48,18 +71,24 @@ void ManOWar::RobotInit() {
 	SmartDashboard::PutString("DB/String 1", "2550");
 	SmartDashboard::PutString("DB/String 2", "1");
 	SmartDashboard::PutString("DB/String 3", "0");
+	SmartDashboard::PutString("DB/String 4", "0");
 
 	this->jetsonSerialPort->DisableTermination();
-	//jetsonSerialPort.SetFlowControl(SerialPort::FlowControl::kFlowControl_XonXoff);
-	//NetworkTable::SetTeam(2410);
-	NetworkTable::SetPort(5000);
 	NetworkTable::SetServerMode();
-	//NetworkTable::Initialize();
-	this->jetsonNetworkTable = NetworkTable::GetTable("Jetson").get();
+	NetworkTable::SetTeam(2410);
+	NetworkTable::SetPort(1735);
+	NetworkTable::Initialize();
+	this->jetsonNetworkTable = NetworkTable::GetTable("Jetson");
+	this->jetsonNetworkTable->PutNumber("angle", 0.f);
+	this->jetsonNetworkTable->PutNumber("distance", 120.f);
 
-	// the camera name (ex "cam0") can be found through the roborio web interface
 	CameraServer::GetInstance()->SetQuality(50);
-	CameraServer::GetInstance()->StartAutomaticCapture("cam0");
+	std::shared_ptr<USBCamera> camera(new USBCamera("cam0", false));
+	camera->OpenCamera();
+	camera->SetExposureManual(0);
+	camera->SetBrightness(80);
+	CameraServer::GetInstance()->StartAutomaticCapture(camera);
+	this->robotDrive->SetSafetyEnabled(false);
 }
 
 void ManOWar::Autonomous() {
@@ -69,22 +98,16 @@ void ManOWar::Autonomous() {
 	std::thread *serialThread;
 	float *angle = new float(0);
 	float *distance = new float(0);
-	long *reads = new long(0);
 
-	serialThread = new std::thread([this, serialThreadQuit, angle, distance, reads] () -> void {
+	serialThread = new std::thread([this, serialThreadQuit, angle, distance] () -> void {
 		char buffer[8];
 		memset(buffer, 0, 8);
 		while(!(*serialThreadQuit)) {
-			SmartDashboard::PutString("DB/String 4", std::to_string(*reads));
-			if (this->jetsonSerialPort->GetBytesReceived() >= 8) {
-				this->jetsonSerialPort->Read(buffer, 8);
-				this->jetsonSerialPort->Reset();
-				memcpy(angle, buffer, sizeof(float));
-				memcpy(distance, buffer + 4, sizeof(float));
-				SmartDashboard::PutString("DB/String 8", std::to_string(*angle));
-				SmartDashboard::PutString("DB/String 9", std::to_string(*distance));
-				*reads += 1;
-			}
+			//SmartDashboard::PutString("DB/String 4", "RIP_SERIAL");
+			*angle = this->jetsonNetworkTable->GetNumber("angle", 0.f);
+			*distance = this->jetsonNetworkTable->GetNumber("distance", 120.f);
+			SmartDashboard::PutString("DB/String 8", std::to_string(*angle));
+			SmartDashboard::PutString("DB/String 9", std::to_string(*distance));
 		}
 	});
 	serialThread->detach();
@@ -99,15 +122,22 @@ void ManOWar::Autonomous() {
 	bool aligned = false;
 	float refAngle = 0;
 
-	this->robotDrive->ArcadeDrive(0.75f, 0, false);
-	Wait(5.0f);
+	this->gyro->Reset();
+
+	this->robotDrive->ArcadeDrive(-0.85f, 0, false);
+	Wait(2.3f);
 	this->robotDrive->ArcadeDrive(0, 0, false);
-	Wait(1.0f);
+	Wait(1.f);
+	while (fabs(this->gyro->GetAngle()) > 0.25) {
+		this->robotDrive->ArcadeDrive(0, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
+	}
+	this->robotDrive->ArcadeDrive(0, 0, false);
+	Wait(2.5f);
 
 	while (!aligned) {
 		if (aligning && !aligned) {
 			DriverStation::ReportError(std::to_string(this->gyro->GetAngle()));
-			if (fabs(refAngle - this->gyro->GetAngle()) > 0.5) {
+			if (fabs(refAngle - this->gyro->GetAngle()) > 0.25) {
 				this->robotDrive->ArcadeDrive(0, sgn(refAngle) * ALIGN_ROTATE_POWER, false);
 			}
 			else {
@@ -124,6 +154,7 @@ void ManOWar::Autonomous() {
 			DriverStation::ReportError("Starting alignment...");
 		}
 	}
+
 	Wait(0.2f);
 	// Get encoder RPMs
 	topFireRpm = this->topFireCanTalon->GetSpeed();
@@ -140,6 +171,8 @@ void ManOWar::Autonomous() {
 	this->botFireCanTalon->Set(botFireTargetRpm);
 
 	do {
+		topFireRpm = this->topFireCanTalon->GetSpeed();
+		botFireRpm = this->botFireCanTalon->GetSpeed();
 		fire = topFireRpm > topFireTargetRpm * 0.975f && topFireRpm < topFireTargetRpm * 1.025f && (botFireRpm > botFireTargetRpm * 0.975f && botFireRpm < botFireTargetRpm * 1.025f);
 	}
 	while (!fire);
@@ -156,7 +189,6 @@ void ManOWar::Autonomous() {
 	delete serialThread;
 	delete angle;
 	delete distance;
-	delete reads;
 }
 
 void ManOWar::OperatorControl() {
@@ -165,27 +197,20 @@ void ManOWar::OperatorControl() {
 	std::thread *serialThread;
 	float *angle = new float(0);
 	float *distance = new float(0);
-	long *reads = new long(0);
 
-	serialThread = new std::thread([this, serialThreadQuit, angle, distance, reads] () -> void {
+	serialThread = new std::thread([this, serialThreadQuit, angle, distance] () -> void {
 		char buffer[8];
 		memset(buffer, 0, 8);
 		while(!(*serialThreadQuit)) {
-			SmartDashboard::PutString("DB/String 4", std::to_string(*reads));
-			if (this->jetsonSerialPort->GetBytesReceived() >= 8) {
-				this->jetsonSerialPort->Read(buffer, 8);
-				this->jetsonSerialPort->Reset();
-				memcpy(angle, buffer, sizeof(float));
-				memcpy(distance, buffer + 4, sizeof(float));
-				SmartDashboard::PutString("DB/String 8", std::to_string(*angle));
-				SmartDashboard::PutString("DB/String 9", std::to_string(*distance));
-				*reads += 1;
-			}
+			//SmartDashboard::PutString("DB/String 4", "RIP_SERIAL");
+			*angle = this->jetsonNetworkTable->GetNumber("angle", 0.f);
+			*distance = this->jetsonNetworkTable->GetNumber("distance", 120.f);
+			SmartDashboard::PutString("DB/String 8", std::to_string(*angle));
+			SmartDashboard::PutString("DB/String 9", std::to_string(*distance));
 		}
 	});
 	serialThread->detach();
 
-	this->robotDrive->SetSafetyEnabled(false);
 	SmartDashboard::PutString("DB/String 7", "CEASE_FIRE");
 
 	bool intakeOverride = false;
@@ -203,6 +228,12 @@ void ManOWar::OperatorControl() {
 	bool reverseSpin;
 	bool autoFire;
 	bool autoAlign;
+	bool armSet;
+	bool port;
+	bool bridge;
+	bool sally;
+	bool frise;
+	bool reset;
 
 	bool aligning = false;
 	bool aligned = false;
@@ -210,21 +241,32 @@ void ManOWar::OperatorControl() {
 
 	bool fire;
 
+	float Kp = 0.044000;
+	float Ki = 0.000001;
+	float Kd = 0.000001;
+	float xPIDError = 0;
+	float xPIDIntegral = 0;
+	float xCurrentSpeed = 0;
+	float yPIDError = 0;
+	float yPIDIntegral = 0;
+	float yCurrentSpeed = 0;
+	double oldtime = GetTime();
+
 	while (RobotBase::IsEnabled()) {
 		// Grab values from dashboard
-		//topFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 0", "0"));
-		//botFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 1", "0"));
+		topFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 0", "0"));
+		botFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 1", "0"));
 		intakeRpm = std::stof(SmartDashboard::GetString("DB/String 2", "0"));
 
 		// Calculate power
 		if (*distance <= 0 || *distance >= 250.f || isnan(*distance)) {
-			// Correct for serial error
+			// Fallback on error
 			*distance = 120.f;
 		}
-		topFireTargetRpm = sym_sigmoid(*distance, POWER_FUNC_A, POWER_FUNC_B, POWER_FUNC_C, POWER_FUNC_D);
+		/*topFireTargetRpm = sym_sigmoid(*distance, POWER_FUNC_A, POWER_FUNC_B, POWER_FUNC_C, POWER_FUNC_D);
 		botFireTargetRpm = sym_sigmoid(*distance, POWER_FUNC_A, POWER_FUNC_B, POWER_FUNC_C, POWER_FUNC_D);
 		SmartDashboard::PutString("DB/String 0", std::to_string(topFireTargetRpm));
-		SmartDashboard::PutString("DB/String 1", std::to_string(botFireTargetRpm));
+		SmartDashboard::PutString("DB/String 1", std::to_string(botFireTargetRpm));*/
 
 		// Get buttons
 		intake = this->joystick->GetRawButton(JOY_BTN_LBM);
@@ -233,12 +275,32 @@ void ManOWar::OperatorControl() {
 		reverseSpin = this->joystick->GetRawButton(JOY_BTN_RTG);
 		autoFire = this->joystick->GetRawButton(JOY_BTN_A);
 		autoAlign = this->joystick->GetRawButton(JOY_BTN_Y);
+		armSet = this->joystick->GetRawButton(JOY_BTN_B);
+
+		sally = this->joystick->GetPOV() == 0;
+		port = this->joystick->GetPOV() == 90;
+		bridge = this->joystick->GetPOV() == 180;
+		reset = this->joystick->GetPOV() == -1;
 
 		// Drive
+		double curTime = GetTime();
+		// X PID loop
+		float xCurrentError = joystick->GetRawAxis(JOY_AXIS_RX) - xCurrentSpeed;
+		xPIDIntegral += xPIDError * (curTime - oldtime);
+		float xPIDderivative = (xCurrentError - xPIDError) / (curTime - oldtime);
+		xCurrentSpeed += (Kp * xCurrentError) + (Ki * xPIDIntegral) + (Kd * xPIDderivative);
+		xPIDError = xCurrentError;
+		// Y PID loop
+		float yCurrentError = joystick->GetRawAxis(JOY_AXIS_LY) - yCurrentSpeed;
+		yPIDIntegral += yPIDError * (curTime - oldtime);
+		float yPIDderivative = (yCurrentError - yPIDError) / (curTime - oldtime);
+		yCurrentSpeed += (Kp * yCurrentError) + (Ki * yPIDIntegral) + (Kd * yPIDderivative);
+		yPIDError = yCurrentError;
+		oldtime = curTime;
 		if (autoAlign) {
 			if (aligning && !aligned) {
 				DriverStation::ReportError(std::to_string(this->gyro->GetAngle()));
-				if (fabs(refAngle - this->gyro->GetAngle()) > 0.5) {
+				if (fabs(refAngle - this->gyro->GetAngle()) > 0.35) {
 					this->robotDrive->ArcadeDrive(0, sgn(refAngle) * ALIGN_ROTATE_POWER, false);
 				}
 				else {
@@ -256,7 +318,25 @@ void ManOWar::OperatorControl() {
 			}
 		}
 		else {
-			this->robotDrive->ArcadeDrive(this->joystick->GetRawAxis(JOY_AXIS_LY), this->joystick->GetRawAxis(JOY_AXIS_RX) * 0.75f);
+			this->robotDrive->ArcadeDrive(yCurrentSpeed, xCurrentSpeed * 0.85f);
+			if (armSet) {
+				//float armA = std::stof(SmartDashboard::GetString("DB/String 3", "0"));
+				//float armB = std::stof(SmartDashboard::GetString("DB/String 4", "0"));
+				if (reset) {
+					this->armACanTalon->Set(0);
+					this->armBCanTalon->Set(0);
+				}
+				else if (sally) {
+					if (autoFire) {
+						this->armACanTalon->Set(SALLY_ARM_A_A);
+						this->armBCanTalon->Set(SALLY_ARM_B_A);
+					}
+					else {
+						this->armACanTalon->Set(SALLY_ARM_A_B);
+						this->armBCanTalon->Set(SALLY_ARM_B_B);
+					}
+				}
+			}
 			aligning = false;
 			aligned = false;
 		}
@@ -270,15 +350,15 @@ void ManOWar::OperatorControl() {
 		fire = topFireRpm > topFireTargetRpm * 0.975f && topFireRpm < topFireTargetRpm * 1.025f && (botFireRpm > botFireTargetRpm * 0.975f && botFireRpm < botFireTargetRpm * 1.025f);
 
 		// Spin fire motors
-		if (spin) {
+		if (spin && !this->armMode) {
 			this->topFireCanTalon->Set(topFireTargetRpm);
 			this->botFireCanTalon->Set(botFireTargetRpm);
 		}
-		else if (reverseSpin) {
+		else if (reverseSpin && !this->armMode) {
 			this->topFireCanTalon->Set(-topFireTargetRpm);
 			this->botFireCanTalon->Set(-botFireTargetRpm);
 		}
-		else {
+		else if (!this->armMode) {
 			this->topFireCanTalon->Set(0.f);
 			this->botFireCanTalon->Set(0.f);
 		}
@@ -299,7 +379,8 @@ void ManOWar::OperatorControl() {
 		}
 
 		// Intake motors
-		if (intake && this->intakeSwitch->Get()) {
+		this->jetsonNetworkTable->PutBoolean("photo_bool", this->photoSensor->Get());
+		if (intake && this->photoSensor->Get()) {
 			this->intakeTalon->Set(intakeRpm);
 		}
 		else if (reverseIntake) {
@@ -316,7 +397,6 @@ void ManOWar::OperatorControl() {
 	delete serialThread;
 	delete angle;
 	delete distance;
-	delete reads;
 	DriverStation::ReportError("Exiting OperatorControl()...");
 }
 

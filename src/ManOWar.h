@@ -18,15 +18,18 @@ public:
 	Talon *intakeTalon;
 	CANTalon *topFireCanTalon;
 	CANTalon *botFireCanTalon;
+	CANTalon *armACanTalon;
+	CANTalon *armBCanTalon;
 
 	Relay *ledRelay;
 
 	AnalogGyro *gyro;
-
-	DigitalInput *intakeSwitch;
+	DigitalInput *photoSensor;
 
 	SerialPort *jetsonSerialPort;
-	NetworkTable *jetsonNetworkTable;
+	std::shared_ptr<NetworkTable> jetsonNetworkTable;
+
+	bool *armMode;
 
 	ManOWar();
 	~ManOWar() {};
