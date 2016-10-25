@@ -54,8 +54,7 @@ void ManOWar::RobotInit() {
 }
 
 void ManOWar::Autonomous() {
-	//
-	int mode = std::stof(SmartDashboard::GetString("DB/String 3", "0"));
+	int mode = std::stoi(SmartDashboard::GetString("DB/String 3", "0"));
 	DriverStation::ReportError("Running Autonomous() " + std::to_string(mode));
 	float *angle = new float(0);
 	float *distance = new float(0);
@@ -194,7 +193,15 @@ void ManOWar::OperatorControl() {
 	float rPIDError = 0;
 	float rPIDIntegral = 0;
 	float rCurrentSpeed = 0;
+	float xPIDError = 0;
+	float xPIDIntegral = 0;
+	float xCurrentSpeed = 0;
+	float yPIDError = 0;
+	float yPIDIntegral = 0;
+	float yCurrentSpeed = 0;
 	double oldtime = GetTime();
+
+	bool isArcadeDrive = false;
 
 	while (RobotBase::IsEnabled()) {
 		// Grab values from dashboard
@@ -218,32 +225,52 @@ void ManOWar::OperatorControl() {
 		reverseIntake = this->joystick->GetRawButton(JOY_BTN_RBM);
 		reverseSpin = this->joystick->GetRawButton(JOY_BTN_RTG);
 		autoFire = this->joystick->GetRawButton(JOY_BTN_A);
-//		autoAlign = this->joystick->GetRawButton(JOY_BTN_Y);
-		//armSet = this->joystick->GetRawButton(JOY_BTN_B);
 
-		//sally = this->joystick->GetPOV() == 0;
-		//port = this->joystick->GetPOV() == 90;
-		//bridge = this->joystick->GetPOV() == 180;
-		//reset = this->joystick->GetPOV() == -1;
+		if (this->joystick->GetPOV() == 0) {
+			isArcadeDrive = true;
+		} else if (this->joystick->GetPOV() == 180) {
+			isArcadeDrive = false;
+		}
 
-		// Drive
-		double curTime = GetTime();
-		// X PID loop
-		float lCurrentError = joystick->GetRawAxis(JOY_AXIS_LY) - lCurrentSpeed;
-		lPIDIntegral += lPIDError * (curTime - oldtime);
-		float lPIDderivative = (lCurrentError - lPIDError) / (curTime - oldtime);
-		lCurrentSpeed += (Kp * lCurrentError) + (Ki * lPIDIntegral) + (Kd * lPIDderivative);
-		lPIDError = lCurrentError;
-		// Y PID loop
-		float rCurrentError = joystick->GetRawAxis(JOY_AXIS_RY) - rCurrentSpeed;
-		rPIDIntegral += rPIDError * (curTime - oldtime);
-		float rPIDderivative = (rCurrentError - rPIDError) / (curTime - oldtime);
-		rCurrentSpeed += (Kp * rCurrentError) + (Ki * rPIDIntegral) + (Kd * rPIDderivative);
-		rPIDError = rCurrentError;
-		oldtime = curTime;
+		if (isArcadeDrive) {
+			// Drive
+			double curTime = GetTime();
+			// X PID loop
+			float xCurrentError = joystick->GetRawAxis(JOY_AXIS_RX) - xCurrentSpeed;
+			xPIDIntegral += xPIDError * (curTime - oldtime);
+			float xPIDderivative = (xCurrentError - xPIDError) / (curTime - oldtime);
+			xCurrentSpeed += (Kp * xCurrentError) + (Ki * xPIDIntegral) + (Kd * xPIDderivative);
+			xPIDError = xCurrentError;
+			// Y PID loop
+			 float yCurrentError = joystick->GetRawAxis(JOY_AXIS_LY) - yCurrentSpeed;
+			 yPIDIntegral += yPIDError * (curTime - oldtime);
+			 float yPIDderivative = (yCurrentError - yPIDError) / (curTime - oldtime);
+			 yCurrentSpeed += (Kp * yCurrentError) + (Ki * yPIDIntegral) + (Kd * yPIDderivative);
+			 yPIDError = yCurrentError;
+			 oldtime = curTime;
 
+			 this->robotDrive->ArcadeDrive(yCurrentSpeed, xCurrentSpeed * 0.85f);
 
-		this->robotDrive->TankDrive(lCurrentSpeed, rCurrentSpeed);
+		} else {
+			// Drive
+			double curTime = GetTime();
+			// L PID loop
+			float lCurrentError = joystick->GetRawAxis(JOY_AXIS_LY) - lCurrentSpeed;
+			lPIDIntegral += lPIDError * (curTime - oldtime);
+			float lPIDderivative = (lCurrentError - lPIDError) / (curTime - oldtime);
+			lCurrentSpeed += (Kp * lCurrentError) + (Ki * lPIDIntegral) + (Kd * lPIDderivative);
+			lPIDError = lCurrentError;
+			// R PID loop
+			float rCurrentError = joystick->GetRawAxis(JOY_AXIS_RY) - rCurrentSpeed;
+			rPIDIntegral += rPIDError * (curTime - oldtime);
+			float rPIDderivative = (rCurrentError - rPIDError) / (curTime - oldtime);
+			rCurrentSpeed += (Kp * rCurrentError) + (Ki * rPIDIntegral) + (Kd * rPIDderivative);
+			rPIDError = rCurrentError;
+			oldtime = curTime;
+
+			this->robotDrive->TankDrive(lCurrentSpeed, rCurrentSpeed);
+		}
+
 
 		// Get encoder RPMs
 		topFireRpm = this->topFireCanTalon->GetSpeed();
