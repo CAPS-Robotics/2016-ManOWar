@@ -43,13 +43,17 @@ void ManOWar::RobotInit() {
 	SmartDashboard::PutString("DB/String 2", "1");
 	SmartDashboard::PutString("DB/String 3", "0");
 	SmartDashboard::PutString("DB/String 4", "0");
+	SmartDashboard::PutNumber("DB/Slider 0", 2.5);
+
+	int cameraBrightness = SmartDashboard::GetNumber("DB/Slider 0", 2.5) * 20;
 
 	CameraServer::GetInstance()->SetQuality(50);
-	std::shared_ptr<USBCamera> camera(new USBCamera("cam0", false));
+	camera.reset(new USBCamera("cam0", false));
 	camera->OpenCamera();
 	camera->SetExposureManual(0);
-	camera->SetBrightness(50);
+	camera->SetBrightness(cameraBrightness);
 	CameraServer::GetInstance()->StartAutomaticCapture(camera);
+
 	this->robotDrive->SetSafetyEnabled(false);
 }
 
@@ -137,13 +141,11 @@ void ManOWar::Autonomous() {
 	} else if (mode == 1) {
 		this->gyro->Reset();
 
-		this->robotDrive->ArcadeDrive(-0.85f, 0, false);
-		Wait(2.3f);
-		this->robotDrive->ArcadeDrive(0, 0, false);
+		this->robotDrive->ArcadeDrive(-0.85f, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
+		Wait(3.5f);
+		this->robotDrive->ArcadeDrive(0, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
 		Wait(1.f);
-		while (fabs(this->gyro->GetAngle()) > 0.25) {
-			this->robotDrive->ArcadeDrive(0, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
-		}
+
 		this->robotDrive->ArcadeDrive(0, 0, false);
 		Wait(2.5f);
 	}
@@ -208,6 +210,8 @@ void ManOWar::OperatorControl() {
 		topFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 0", "0"));
 		botFireTargetRpm = std::stof(SmartDashboard::GetString("DB/String 1", "0"));
 		intakeRpm = std::stof(SmartDashboard::GetString("DB/String 2", "0"));
+
+		camera->SetBrightness(SmartDashboard::GetNumber("DB/Slider 0", 2.5) * 20);
 
 		// Calculate power
 		if (*distance <= 0 || *distance >= 250.f || isnan(*distance)) {
@@ -309,14 +313,19 @@ void ManOWar::OperatorControl() {
 			intakeOverride = false;
 		}
 
+
 		// Intake motors
 		if (intake && this->photoSensor->Get()) {
 			this->intakeTalon->Set(intakeRpm);
-		}
-		else if (reverseIntake) {
+		} else if (intake && !this->photoSensor->Get()) {
+			SmartDashboard::PutString("DB/String 8", "Picked Up");
+			this->intakeTalon->Set(0.f);
+		} else if (reverseIntake && this->photoSensor->Get()) {
+			SmartDashboard::PutString("DB/String 8", "Dropped");
+			this->intakeTalon->Set(0.f);
+		} else if (reverseIntake) {
 			this->intakeTalon->Set(-intakeRpm / 2.f);
-		}
-		else if (!intakeOverride) {
+		} else if (!intakeOverride) {
 			this->intakeTalon->Set(0.f);
 		}
 	}

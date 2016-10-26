@@ -24,6 +24,8 @@ public:
 	AnalogGyro *gyro;
 	DigitalInput *photoSensor;
 
+	std::shared_ptr<USBCamera> camera;
+
 	ManOWar();
 	~ManOWar() {};
 
