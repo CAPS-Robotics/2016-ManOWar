@@ -205,6 +205,7 @@ void ManOWar::OperatorControl() {
 	double oldtime = GetTime();
 
 	bool isArcadeDrive = true;
+	bool dropped = false;
 
 	while (RobotBase::IsEnabled()) {
 		// Grab values from dashboard
@@ -286,6 +287,11 @@ void ManOWar::OperatorControl() {
 
 		fire = topFireRpm > topFireTargetRpm * 0.975f && topFireRpm < topFireTargetRpm * 1.025f && (botFireRpm > botFireTargetRpm * 0.975f && botFireRpm < botFireTargetRpm * 1.025f);
 
+		if (spin && !dropped) {
+			autoDrop = true;
+			spin = false;
+		}
+
 		// Spin fire motors
 		if (spin) {
 			this->topFireCanTalon->Set(topFireTargetRpm);
@@ -300,11 +306,14 @@ void ManOWar::OperatorControl() {
 			this->botFireCanTalon->Set(0.f);
 		}
 
+
 		if (fire) {
 			SmartDashboard::PutString("DB/String 7", "FIRE");
+			SmartDashboard::PutBoolean("DB/LED 1", true);
 			if (spin && autoFire) {
 				this->intakeTalon->Set(intakeRpm);
 				intakeOverride = true;
+				SmartDashboard::PutBoolean("DB/LED 0", false);
 			}
 			else {
 				intakeOverride = false;
@@ -313,17 +322,20 @@ void ManOWar::OperatorControl() {
 		else {
 			SmartDashboard::PutString("DB/String 7", "CEASE_FIRE");
 			intakeOverride = false;
+			SmartDashboard::PutBoolean("DB/LED 1", false);
 		}
 
 		if (autoDrop && !this->photoSensor->Get()) {
+			SmartDashboard::PutString("DB/String 8", "Dropping");
 			this->intakeTalon->Set(-intakeRpm / 1.5f);
 		} else if (autoDrop && this->photoSensor->Get()) {
 			SmartDashboard::PutString("DB/String 8", "Dropped");
+			SmartDashboard::PutBoolean("DB/LED 0", true);
 			this->intakeTalon->Set(0.f);
+			dropped = true;
 		}
-
 		// Intake motors
-		if (intake && this->photoSensor->Get()) {
+		else if (intake && this->photoSensor->Get()) {
 			// If spinning ball in
 			this->intakeTalon->Set(intakeRpm);
 		} else if (intake && !this->photoSensor->Get()) {
