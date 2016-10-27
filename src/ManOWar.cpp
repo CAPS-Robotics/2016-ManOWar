@@ -172,6 +172,7 @@ void ManOWar::OperatorControl() {
 	bool reverseIntake;
 	bool reverseSpin;
 	bool autoFire;
+	bool autoDrop;
 //	bool autoAlign;
 	//bool armSet;
 	//bool port;
@@ -203,7 +204,7 @@ void ManOWar::OperatorControl() {
 	float yCurrentSpeed = 0;
 	double oldtime = GetTime();
 
-	bool isArcadeDrive = false;
+	bool isArcadeDrive = true;
 
 	while (RobotBase::IsEnabled()) {
 		// Grab values from dashboard
@@ -229,6 +230,7 @@ void ManOWar::OperatorControl() {
 		reverseIntake = this->joystick->GetRawButton(JOY_BTN_RBM);
 		reverseSpin = this->joystick->GetRawButton(JOY_BTN_RTG);
 		autoFire = this->joystick->GetRawButton(JOY_BTN_A);
+		autoDrop = this->joystick->GetRawButton(JOY_BTN_B);
 
 		if (this->joystick->GetPOV() == 0) {
 			isArcadeDrive = true;
@@ -313,19 +315,26 @@ void ManOWar::OperatorControl() {
 			intakeOverride = false;
 		}
 
+		if (autoDrop && !this->photoSensor->Get()) {
+			this->intakeTalon->Set(-intakeRpm / 1.5f);
+		} else if (autoDrop && this->photoSensor->Get()) {
+			SmartDashboard::PutString("DB/String 8", "Dropped");
+			this->intakeTalon->Set(0.f);
+		}
 
 		// Intake motors
 		if (intake && this->photoSensor->Get()) {
+			// If spinning ball in
 			this->intakeTalon->Set(intakeRpm);
 		} else if (intake && !this->photoSensor->Get()) {
+			// If balled is picked up
 			SmartDashboard::PutString("DB/String 8", "Picked Up");
 			this->intakeTalon->Set(0.f);
-		} else if (reverseIntake && this->photoSensor->Get()) {
-			SmartDashboard::PutString("DB/String 8", "Dropped");
-			this->intakeTalon->Set(0.f);
 		} else if (reverseIntake) {
-			this->intakeTalon->Set(-intakeRpm / 2.f);
+			// Reverse intake if ball loaded
+			this->intakeTalon->Set(-intakeRpm);
 		} else if (!intakeOverride) {
+			// Otherwise, just don't run it
 			this->intakeTalon->Set(0.f);
 		}
 	}
