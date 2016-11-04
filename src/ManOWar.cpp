@@ -41,7 +41,7 @@ void ManOWar::RobotInit() {
 	SmartDashboard::PutString("DB/String 0", "2550");
 	SmartDashboard::PutString("DB/String 1", "2550");
 	SmartDashboard::PutString("DB/String 2", "1");
-	SmartDashboard::PutString("DB/String 3", "0");
+	SmartDashboard::PutString("DB/String 3", "1");
 	SmartDashboard::PutString("DB/String 4", "0");
 	SmartDashboard::PutNumber("DB/Slider 0", 2.5);
 
@@ -71,12 +71,12 @@ void ManOWar::Autonomous() {
 
 	bool aligning = false;
 	bool aligned = false;
-	float refAngle = 0;
+	float refAngle = std::stof(SmartDashboard::GetString("DB/String 4", "0"));
 
 	if (mode == 0) {
 		this->gyro->Reset();
 
-		this->robotDrive->ArcadeDrive(-0.85f, 0, false);
+		this->robotDrive->ArcadeDrive(-0.85f, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
 		Wait(2.3f);
 		this->robotDrive->ArcadeDrive(0, 0, false);
 		Wait(1.f);
@@ -141,13 +141,36 @@ void ManOWar::Autonomous() {
 	} else if (mode == 1) {
 		this->gyro->Reset();
 
-		this->robotDrive->ArcadeDrive(-0.85f, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
-		Wait(3.5f);
-		this->robotDrive->ArcadeDrive(0, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER, false);
+		this->robotDrive->ArcadeDrive(-1.f, 0, false);
+		Wait(3.0f);
+		this->robotDrive->ArcadeDrive(0, 0, false);
+		Wait(1.f);
+	} else if (mode == 2) {
+
+	} else if (mode == 3) {
+		topFireTargetRpm = 2550;
+		botFireTargetRpm = 2550;
+
+		this->robotDrive->ArcadeDrive(-0.5f, -0.05f, false);
+		Wait(0.5f);
+		this->robotDrive->ArcadeDrive(0, 0, false);
 		Wait(1.f);
 
-		this->robotDrive->ArcadeDrive(0, 0, false);
-		Wait(2.5f);
+		this->topFireCanTalon->Set(topFireTargetRpm);
+		this->botFireCanTalon->Set(botFireTargetRpm);
+
+		do {
+			topFireRpm = this->topFireCanTalon->GetSpeed();
+			botFireRpm = this->botFireCanTalon->GetSpeed();
+			fire = topFireRpm > topFireTargetRpm * 0.975f && topFireRpm < topFireTargetRpm * 1.025f && (botFireRpm > botFireTargetRpm * 0.975f && botFireRpm < botFireTargetRpm * 1.025f);
+		}
+		while (!fire);
+		this->intakeTalon->Set(1.f);
+		Wait(1.0f);
+		this->intakeTalon->Set(0.f);
+		this->topFireCanTalon->Set(0.f);
+		this->botFireCanTalon->Set(0.f);
+
 	}
 }
 
@@ -256,7 +279,11 @@ void ManOWar::OperatorControl() {
 			 yPIDError = yCurrentError;
 			 oldtime = curTime;
 
-			 this->robotDrive->ArcadeDrive(yCurrentSpeed, xCurrentSpeed * 0.85f);
+			 if (fabs(xCurrentSpeed) >= 0.05) {
+				this->robotDrive->ArcadeDrive(yCurrentSpeed, xCurrentSpeed * 0.85f);
+			 } else {
+				this->robotDrive->ArcadeDrive(yCurrentSpeed, sgn(-this->gyro->GetAngle()) * ALIGN_ROTATE_POWER);
+			 }
 
 		} else {
 			// Drive
@@ -285,7 +312,7 @@ void ManOWar::OperatorControl() {
 		SmartDashboard::PutString("DB/String 5", std::to_string(topFireRpm));
 		SmartDashboard::PutString("DB/String 6", std::to_string(botFireRpm));
 
-		fire = topFireRpm > topFireTargetRpm * 0.975f && topFireRpm < topFireTargetRpm * 1.025f && (botFireRpm > botFireTargetRpm * 0.975f && botFireRpm < botFireTargetRpm * 1.025f);
+		fire = topFireRpm > topFireTargetRpm * 1.f && topFireRpm < topFireTargetRpm * 1.025f && (botFireRpm > botFireTargetRpm * 1.f && botFireRpm < botFireTargetRpm * 1.025f);
 
 		if (spin && !dropped) {
 			autoDrop = true;
